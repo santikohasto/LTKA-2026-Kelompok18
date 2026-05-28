@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QoS-RIC Dashboard</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0f1117; color: #e2e8f0; font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px; }
+
+    /* ── Top bar ── */
+    .topbar {
+      background: #1a1d27;
+      border-bottom: 1px solid #2d3148;
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .topbar h1 { font-size: 18px; font-weight: 600; color: #a78bfa; }
+    .topbar .sub { font-size: 12px; color: #64748b; margin-top: 2px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e;
+                  display: inline-block; margin-right: 6px; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+    .engine-status { font-size: 12px; color: #94a3b8; }
+
+    /* ── Layout ── */
+    .container { padding: 20px 24px; max-width: 1400px; margin: 0 auto; }
+
+    /* ── Demo Control Bar ── */
+    .demo-bar {
+      background: #1a1d27;
+      border: 1px solid #2d3148;
+      border-radius: 10px;
+      padding: 14px 20px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .demo-bar label { font-size: 12px; color: #94a3b8; font-weight: 500; }
+    .demo-btn {
+      padding: 8px 18px;
+      border-radius: 7px;
+      border: none;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .demo-btn:hover { transform: translateY(-1px); filter: brightness(1.15); }
+    .btn-normal  { background: #1e3a2f; color: #4ade80; border: 1px solid #166534; }
+    .btn-stress  { background: #3a2e1a; color: #fbbf24; border: 1px solid #92400e; }
+    .btn-kill    { background: #3a1a1a; color: #f87171; border: 1px solid #991b1b; }
+    .active-mode { font-size: 12px; margin-left: auto; }
+    .mode-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    /* ── Stats cards ── */
+    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+    .card {
+      background: #1a1d27;
+      border: 1px solid #2d3148;
+      border-radius: 10px;
+      padding: 16px 20px;
+    }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .card-title { font-size: 12px; color: #64748b; font-weight: 500; text-transform: uppercase; letter-spacing: .05em; }
+    .card-type { font-size: 11px; padding: 2px 8px; border-radius: 12px; font-weight: 600; }
+    .emergency-badge { background: #3a1a1a; color: #f87171; }
+    .industry-badge  { background: #3a2e1a; color: #fbbf24; }
+    .normal-badge    { background: #1a2535; color: #60a5fa; }
+
+    .card-prb { font-size: 32px; font-weight: 700; margin-bottom: 4px; }
+    .card-sub { font-size: 12px; color: #64748b; }
+    .sla-bar-wrap { margin-top: 10px; background: #2d3148; border-radius: 4px; height: 6px; }
+    .sla-bar { height: 6px; border-radius: 4px; transition: width .5s; }
+    .sla-label { font-size: 12px; margin-top: 5px; display: flex; justify-content: space-between; }
+
+    /* ── Charts grid ── */
+    .charts { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 20px; }
+    .chart-box {
+      background: #1a1d27;
+      border: 1px solid #2d3148;
+      border-radius: 10px;
+      padding: 16px 20px;
+    }
+    .chart-title { font-size: 13px; font-weight: 600; color: #cbd5e1; margin-bottom: 14px; }
+    canvas { max-height: 220px; }
+
+    /* ── Live table ── */
+    .table-box {
+      background: #1a1d27;
+      border: 1px solid #2d3148;
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+    }
+    .table-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .table-title { font-size: 13px; font-weight: 600; color: #cbd5e1; }
+    .live-badge { font-size: 10px; color: #22c55e; font-weight: 600;
+                  border: 1px solid #166534; padding: 2px 8px; border-radius: 10px; }
+    table { width: 100%; border-collapse: collapse; }
+    th { font-size: 11px; color: #64748b; font-weight: 500; text-transform: uppercase;
+         letter-spacing: .05em; padding: 8px 12px; text-align: left;
+         border-bottom: 1px solid #2d3148; }
+    td { padding: 7px 12px; font-size: 12px; border-bottom: 1px solid #1e2235; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #1e2235; }
+
+    .sla-ok   { color: #4ade80; font-weight: 500; }
+    .sla-fail { color: #f87171; font-weight: 500; }
+    .type-em  { color: #f87171; }
+    .type-in  { color: #fbbf24; }
+    .type-no  { color: #60a5fa; }
+
+    /* ── Alert log ── */
+    .alert-box {
+      background: #1a1d27;
+      border: 1px solid #2d3148;
+      border-radius: 10px;
+      padding: 16px 20px;
+    }
+    .alert-item {
+      padding: 8px 12px;
+      border-radius: 6px;
+      margin-bottom: 6px;
+      font-size: 12px;
+      border-left: 3px solid;
+    }
+    .alert-violation { background: #2d1515; border-color: #ef4444; color: #fca5a5; }
+    .alert-info      { background: #132040; border-color: #3b82f6; color: #93c5fd; }
+    .alert-ok        { background: #0f2a1a; border-color: #22c55e; color: #86efac; }
+    .alert-time      { color: #64748b; font-size: 11px; margin-right: 8px; }
+
+    .footer { text-align: center; padding: 16px; font-size: 11px; color: #374151; }
+  </style>
+</head>
+<body>
+
+<!-- Top bar -->
+<div class="topbar">
+  <div>
+    <h1>QoS-RIC Dashboard</h1>
+    <div class="sub">AI-Powered Network Resource Allocator · Huawei Cloud</div>
+  </div>
+  <div class="engine-status">
+    <span class="status-dot" id="status-dot"></span>
+    <span id="engine-status-text">Connecting...</span>
+    &nbsp;|&nbsp;
+    <span id="clock"></span>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- Demo control bar -->
+  <div class="demo-bar">
+    <label>DEMO CONTROL</label>
+    <button class="demo-btn btn-normal"  onclick="setMode('normal')">
+      ▶ Normal Operation
+    </button>
+    <button class="demo-btn btn-stress"  onclick="setMode('stress')">
+      ⚡ Stress Test (4× traffic)
+    </button>
+    <button class="demo-btn btn-kill"    onclick="setMode('kill')">
+      🔴 Trigger SLA Violation
+    </button>
+    <div class="active-mode">
+      Mode aktif: <span class="mode-badge" id="mode-badge" style="background:#1e3a2f;color:#4ade80;">NORMAL</span>
+    </div>
+  </div>
+
+  <!-- Stat cards -->
+  <div class="cards">
+    <div class="card" id="card-emergency">
+      <div class="card-header">
+        <span class="card-title">Emergency Users</span>
+        <span class="card-type emergency-badge">🚨 DARURAT</span>
+      </div>
+      <div class="card-prb" id="em-prb" style="color:#f87171;">—</div>
+      <div class="card-sub">avg PRB allocated &nbsp;|&nbsp; <span id="em-lat">— ms</span> avg latency</div>
+      <div class="sla-bar-wrap">
+        <div class="sla-bar" id="em-sla-bar" style="width:0%;background:#22c55e;"></div>
+      </div>
+      <div class="sla-label">
+        <span style="color:#64748b;">SLA Compliance</span>
+        <span id="em-sla-pct" style="font-weight:600;">—%</span>
+      </div>
+    </div>
+
+    <div class="card" id="card-industry">
+      <div class="card-header">
+        <span class="card-title">Industry Users</span>
+        <span class="card-type industry-badge">🏭 INDUSTRI</span>
+      </div>
+      <div class="card-prb" id="in-prb" style="color:#fbbf24;">—</div>
+      <div class="card-sub">avg PRB allocated &nbsp;|&nbsp; <span id="in-lat">— ms</span> avg latency</div>
+      <div class="sla-bar-wrap">
+        <div class="sla-bar" id="in-sla-bar" style="width:0%;background:#22c55e;"></div>
+      </div>
+      <div class="sla-label">
+        <span style="color:#64748b;">SLA Compliance</span>
+        <span id="in-sla-pct" style="font-weight:600;">—%</span>
+      </div>
+    </div>
+
+    <div class="card" id="card-normal">
+      <div class="card-header">
+        <span class="card-title">Normal Users</span>
+        <span class="card-type normal-badge">👤 BIASA</span>
+      </div>
+      <div class="card-prb" id="no-prb" style="color:#60a5fa;">—</div>
+      <div class="card-sub">avg PRB allocated &nbsp;|&nbsp; <span id="no-lat">— ms</span> avg latency</div>
+      <div class="sla-bar-wrap">
+        <div class="sla-bar" id="no-sla-bar" style="width:0%;background:#22c55e;"></div>
+      </div>
+      <div class="sla-label">
+        <span style="color:#64748b;">SLA Compliance</span>
+        <span id="no-sla-pct" style="font-weight:600;">—%</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="charts">
+    <div class="chart-box">
+      <div class="chart-title">PRB Allocation — Real-time (last 30 decisions)</div>
+      <canvas id="prb-chart"></canvas>
+    </div>
+    <div class="chart-box">
+      <div class="chart-title">SLA Compliance per User Type</div>
+      <canvas id="sla-chart"></canvas>
+    </div>
+  </div>
+
+  <!-- Live table -->
+  <div class="table-box">
+    <div class="table-header">
+      <span class="table-title">Live Decision Log</span>
+      <span class="live-badge">● LIVE</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Waktu</th>
+          <th>Tipe User</th>
+          <th>BW Req (Mbps)</th>
+          <th>Latency Req</th>
+          <th>PRB Dialokasikan</th>
+          <th>Est. Latency</th>
+          <th>SLA</th>
+          <th>Model</th>
+        </tr>
+      </thead>
+      <tbody id="live-table-body">
+        <tr><td colspan="8" style="text-align:center;color:#64748b;padding:20px;">
+          Menunggu data...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Alert log -->
+  <div class="alert-box">
+    <div class="table-header">
+      <span class="table-title">Alert & Event Log</span>
+    </div>
+    <div id="alert-log">
+      <div class="alert-item alert-info">
+        <span class="alert-time" id="start-time"></span>
+        Dashboard dimulai — sistem berjalan normal
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">
+  QoS-RIC v1.0 · Huawei Cloud · Auto-refresh setiap {{ refresh_ms }}ms
+</div>
+
+<script>
+const REFRESH_MS    = {{ refresh_ms }};
+const COLORS = {
+  emergency: "#f87171",
+  industry:  "#fbbf24",
+  normal:    "#60a5fa",
+};
+
+let prbHistory = { emergency: [], industry: [], normal: [] };
+let timeLabels = [];
+let currentMode = "normal";
+
+// ── Chart setup ──────────────────────────────────────────
+const prbCtx = document.getElementById("prb-chart").getContext("2d");
+const prbChart = new Chart(prbCtx, {
+  type: "line",
+  data: {
+    labels: [],
+    datasets: [
+      { label: "Emergency", data: [], borderColor: "#f87171", backgroundColor: "rgba(248,113,113,.1)", tension: .4, fill: true },
+      { label: "Industry",  data: [], borderColor: "#fbbf24", backgroundColor: "rgba(251,191,36,.1)",  tension: .4, fill: true },
+      { label: "Normal",    data: [], borderColor: "#60a5fa", backgroundColor: "rgba(96,165,250,.1)",  tension: .4, fill: true },
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: true,
+    plugins: { legend: { labels: { color: "#94a3b8", font: { size: 11 } } } },
+    scales: {
+      x: { ticks: { color: "#64748b", maxTicksLimit: 8, font: { size: 10 } }, grid: { color: "#1e2235" } },
+      y: { ticks: { color: "#64748b", font: { size: 10 } }, grid: { color: "#1e2235" },
+           title: { display: true, text: "PRB", color: "#64748b", font: { size: 11 } } }
+    }
+  }
+});
+
+const slaCtx = document.getElementById("sla-chart").getContext("2d");
+const slaChart = new Chart(slaCtx, {
+  type: "bar",
+  data: {
+    labels: ["Emergency", "Industry", "Normal"],
+    datasets: [{
+      label: "SLA Compliance %",
+      data: [0, 0, 0],
+      backgroundColor: ["rgba(248,113,113,.7)", "rgba(251,191,36,.7)", "rgba(96,165,250,.7)"],
+      borderColor:     ["#f87171", "#fbbf24", "#60a5fa"],
+      borderWidth: 1,
+      borderRadius: 5,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: true,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: "#94a3b8", font: { size: 11 } }, grid: { display: false } },
+      y: { min: 0, max: 100, ticks: { color: "#64748b", font: { size: 10 } },
+           grid: { color: "#1e2235" } }
+    }
+  }
+});
+
+// ── Clock ────────────────────────────────────────────────
+function updateClock() {
+  document.getElementById("clock").textContent = new Date().toLocaleTimeString("id-ID");
+}
+setInterval(updateClock, 1000);
+updateClock();
+document.getElementById("start-time").textContent = new Date().toLocaleTimeString("id-ID");
+
+// ── Fetch & update stats ──────────────────────────────────
+async function updateStats() {
+  try {
+    const resp = await fetch("/api/stats");
+    const data = await resp.json();
+    const stats = data.stats || [];
+
+    const map = {};
+    for (const s of stats) map[s.user_type] = s;
+
+    const types = [
+      { key: "emergency", prbEl: "em-prb", latEl: "em-lat",
+        barEl: "em-sla-bar", pctEl: "em-sla-pct" },
+      { key: "industry",  prbEl: "in-prb", latEl: "in-lat",
+        barEl: "in-sla-bar", pctEl: "in-sla-pct" },
+      { key: "normal",    prbEl: "no-prb", latEl: "no-lat",
+        barEl: "no-sla-bar", pctEl: "no-sla-pct" },
+    ];
+
+    const slaValues = [];
+
+    for (const t of types) {
+      const s = map[t.key];
+      if (!s) { slaValues.push(0); continue; }
+
+      document.getElementById(t.prbEl).textContent = Math.round(s.avg_prb || 0);
+      document.getElementById(t.latEl).textContent = Math.round(s.avg_latency || 0) + " ms";
+
+      const pct = s.sla_compliance_pct || 0;
+      const bar = document.getElementById(t.barEl);
+      bar.style.width = pct + "%";
+      bar.style.background = pct >= 90 ? "#22c55e" : pct >= 70 ? "#fbbf24" : "#ef4444";
+
+      const pctEl = document.getElementById(t.pctEl);
+      pctEl.textContent = pct.toFixed(1) + "%";
+      pctEl.style.color  = pct >= 90 ? "#4ade80" : pct >= 70 ? "#fbbf24" : "#f87171";
+
+      slaValues.push(pct);
+
+      // SLA violation alert
+      if (t.key === "emergency" && pct < 90 && pct > 0) {
+        addAlert(`SLA Emergency turun ke ${pct.toFixed(1)}%! Alert SMN terkirim.`, "violation");
+      }
+    }
+
+    // Update bar chart
+    slaChart.data.datasets[0].data = slaValues;
+    slaChart.update("none");
+
+  } catch(e) {
+    document.getElementById("engine-status-text").textContent = "Engine offline";
+    document.getElementById("status-dot").style.background = "#ef4444";
+  }
+}
+
+// ── Fetch & update live table + PRB chart ────────────────
+let lastRecordId = null;
+
+async function updateRecent() {
+  try {
+    const resp = await fetch("/api/recent");
+    const data = await resp.json();
+    const records = data.records || [];
+
+    // Update PRB line chart
+    const timeNow = new Date().toLocaleTimeString("id-ID");
+    const avgByType = { emergency: [], industry: [], normal: [] };
+    for (const r of records.slice(0, 20)) {
+      avgByType[r.user_type]?.push(r.prb_allocated);
+    }
+
+    timeLabels.push(timeNow);
+    if (timeLabels.length > 30) timeLabels.shift();
+
+    prbChart.data.labels = [...timeLabels];
+    for (let i = 0; i < 3; i++) {
+      const key = ["emergency","industry","normal"][i];
+      const arr  = avgByType[key];
+      const avg  = arr.length ? arr.reduce((a,b) => a+b, 0) / arr.length : null;
+      prbChart.data.datasets[i].data.push(avg);
+      if (prbChart.data.datasets[i].data.length > 30)
+        prbChart.data.datasets[i].data.shift();
+    }
+    prbChart.update("none");
+
+    // Update table
+    const tbody = document.getElementById("live-table-body");
+    tbody.innerHTML = "";
+
+    for (const r of records.slice(0, 20)) {
+      const ts = r.created_at
+        ? new Date(r.created_at).toLocaleTimeString("id-ID")
+        : "—";
+      const typeClass = { emergency: "type-em", industry: "type-in", normal: "type-no" }[r.user_type] || "";
+      const typeLabel = { emergency: "🚨 Darurat", industry: "🏭 Industri", normal: "👤 Biasa" }[r.user_type] || r.user_type;
+      const slaClass  = r.sla_ok ? "sla-ok" : "sla-fail";
+      const slaText   = r.sla_ok ? "✓ OK" : "✗ FAIL";
+
+      tbody.innerHTML += `
+        <tr>
+          <td style="color:#64748b">${ts}</td>
+          <td class="${typeClass}" style="font-weight:500">${typeLabel}</td>
+          <td>${(r.bw_requested || r.bw_req || 0).toFixed(2)}</td>
+          <td>${r.latency_req} ms</td>
+          <td style="font-weight:600;color:#a78bfa">${r.prb_allocated}</td>
+          <td>${(r.expected_latency || 0).toFixed(1)} ms</td>
+          <td class="${slaClass}">${slaText}</td>
+          <td style="color:#64748b;font-size:11px">${r.model_used || "—"}</td>
+        </tr>`;
+    }
+
+    // Engine online
+    document.getElementById("engine-status-text").textContent = "Engine online";
+    document.getElementById("status-dot").style.background = "#22c55e";
+
+  } catch(e) { /* silent */ }
+}
+
+// ── Engine status ─────────────────────────────────────────
+async function updateEngineStatus() {
+  try {
+    const resp = await fetch("/api/status");
+    const data = await resp.json();
+    if (data.status === "running") {
+      document.getElementById("engine-status-text").textContent =
+        `Engine online · model: ${data.model}`;
+    }
+  } catch(e) {}
+}
+
+// ── Demo mode toggle ──────────────────────────────────────
+const modeBadge = document.getElementById("mode-badge");
+const modeStyles = {
+  normal: { bg: "#1e3a2f", color: "#4ade80", label: "NORMAL" },
+  stress: { bg: "#3a2e1a", color: "#fbbf24", label: "STRESS TEST" },
+  kill:   { bg: "#3a1a1a", color: "#f87171", label: "SLA VIOLATION" },
+};
+
+async function setMode(mode) {
+  try {
+    const resp = await fetch(`/api/demo/${mode}`, { method: "POST" });
+    const data = await resp.json();
+    currentMode = mode;
+
+    const style = modeStyles[mode];
+    modeBadge.textContent             = style.label;
+    modeBadge.style.background        = style.bg;
+    modeBadge.style.color             = style.color;
+
+    const msgMap = {
+      normal: "Mode NORMAL — sistem berjalan dengan proporsi user realistis",
+      stress: "Mode STRESS TEST — user biasa dinaikkan 4× lipat",
+      kill:   "Mode SLA VIOLATION — resource dipaksa 30%, SLA akan dilanggar. Cek HP untuk alert SMN!",
+    };
+    addAlert(msgMap[mode], mode === "kill" ? "violation" : mode === "stress" ? "info" : "ok");
+
+  } catch(e) {
+    addAlert("Gagal mengubah mode: " + e.message, "violation");
+  }
+}
+
+// ── Alert log helper ──────────────────────────────────────
+let alertHistory = new Set();
+
+function addAlert(msg, type = "info") {
+  if (alertHistory.has(msg)) return;
+  alertHistory.add(msg);
+  if (alertHistory.size > 50) alertHistory.clear();
+
+  const log     = document.getElementById("alert-log");
+  const div     = document.createElement("div");
+  const ts      = new Date().toLocaleTimeString("id-ID");
+  const cssClass = { violation: "alert-violation", info: "alert-info", ok: "alert-ok" }[type] || "alert-info";
+
+  div.className = `alert-item ${cssClass}`;
+  div.innerHTML = `<span class="alert-time">${ts}</span>${msg}`;
+  log.insertBefore(div, log.firstChild);
+
+  // Maksimal 10 alert
+  while (log.children.length > 10) log.removeChild(log.lastChild);
+}
+
+// ── Main refresh loop ─────────────────────────────────────
+async function refresh() {
+  await Promise.all([updateStats(), updateRecent()]);
+}
+
+updateEngineStatus();
+refresh();
+setInterval(refresh, REFRESH_MS);
+setInterval(updateEngineStatus, 10000);
+</script>
+</body>
+</html>
